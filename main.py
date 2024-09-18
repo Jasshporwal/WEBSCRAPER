@@ -10,16 +10,13 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from config import Settings
 from scraper import scrape_website
-
+from fastapi import Request, Depends, HTTPException, Query
 
 
 
 app = FastAPI()
 
-# Initialize the limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-
+#
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -29,8 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add SlowAPI middleware
-app.add_middleware(SlowAPIMiddleware)
+
 
 class ScrapeRequest(BaseModel):
     url: str
@@ -39,24 +35,19 @@ class ScrapeRequest(BaseModel):
 def get_settings():
     return Settings()
 
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={"error": "Rate limit exceeded. Try again later."},
-    )
+
 
 @app.post("/scrape")
-@limiter.limit("5/minute")
-async def scrape_endpoint(request : Request, settings: Settings = Depends(get_settings)):
+async def scrape_endpoint(
+    request: Request, 
+    url: str = Query(..., description="The URL to scrape"), 
+    settings: Settings = Depends(get_settings)
+):
+    print(f"Received scrape request for URL: {url}")
     try:
-        result = await scrape_website(request.url, settings)
+        result = await scrape_website(url, settings)
+        print(f"Scraping completed. Extracted info: {result}")
         return {"extracted_info": result}
     except Exception as e:
+        print(f"Error in scrape_endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)

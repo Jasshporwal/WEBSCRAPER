@@ -1,38 +1,43 @@
-from langchain_community.llms import OpenAI
-from langchain.chains import create_extraction_chain
-from langchain.callbacks.base import BaseCallbackHandler
-from typing import List, Dict, Any
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+from typing import List
+from config import Settings
 
-# Define the schema for extraction
-schema = {
-    "properties": {
-        "title": {"type": "string"},
-        "content": {"type": "string"},
-        "author": {"type": "string"},
-        "date": {"type": "string"},
-    },
-    "required": ["title", "content"],
-}
+class ExtractedInfo(BaseModel):
+    title: str = Field(description="The title of the article")
+    summary: str = Field(description="A brief summary of the article")
+    key_points: List[str] = Field(description="A list of key points from the article")
 
-class ExtractCallbackHandler(BaseCallbackHandler):
-    def __init__(self):
-        self.result = None
+async def extract_information(text: str, settings: Settings) -> ExtractedInfo:
+    prompt = ChatPromptTemplate.from_template(
+        "Extract the following information from the given text:\n"
+        "1. The title of the article\n"
+        "2. A brief summary of the article\n"
+        "3. A list of key points from the article\n\n"
+        "Text: {text}\n\n"
+        "Provide the output in the following format:\n"
+        "Title: [title]\n"
+        "Summary: [summary]\n"
+        "Key Points:\n"
+        "- [point 1]\n"
+        "- [point 2]\n"
+        "...\n"
+    )
 
-    def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
-        self.result = outputs.get("output")
+    model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo", openai_api_key=settings.openai_api_key)
+    parser = PydanticOutputParser(pydantic_object=ExtractedInfo)
 
+    chain = prompt | model | parser
 
-async def extract_information(text: str, settings) -> List[Dict[str, Any]]:
     try:
-        llm = OpenAI(temperature=0, model="gpt-3.5-turbo-0613", openai_api_key=settings.openai_api_key)
-        extract_chain = create_extraction_chain(schema, llm)
-        
-        callback = ExtractCallbackHandler()
-        result = extract_chain({"input": text}, callbacks=[callback])
-        
-        if callback.result is None:
-            raise Exception("Failed to extract information")
-        
-        return callback.result
+        result = await chain.ainvoke({"text": text})
+        return result
     except Exception as e:
-        raise Exception(f"Error extracting information: {str(e)}")
+        print(f"Error in extract_information: {str(e)}")
+        return ExtractedInfo(
+            title="Error in extraction",
+            summary="An error occurred while extracting information.",
+            key_points=["Unable to extract key points due to an error."]
+        )
