@@ -3,12 +3,14 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 from typing import List
-from config import Settings
+from src.calculations.config import Settings
+
 
 class ExtractedInfo(BaseModel):
     title: str = Field(description="The title of the article")
     summary: str = Field(description="A brief summary of the article")
     key_points: List[str] = Field(description="A list of key points from the article")
+
 
 async def extract_information(text: str, settings: Settings) -> ExtractedInfo:
     prompt = ChatPromptTemplate.from_template(
@@ -26,7 +28,9 @@ async def extract_information(text: str, settings: Settings) -> ExtractedInfo:
         "...\n"
     )
 
-    model = ChatOpenAI(temperature=0, model="gpt-3.5-turbo", openai_api_key=settings.openai_api_key)
+    model = ChatOpenAI(
+        temperature=0, model="gpt-3.5-turbo", openai_api_key=settings.openai_api_key
+    )
     parser = PydanticOutputParser(pydantic_object=ExtractedInfo)
 
     chain = prompt | model | parser
@@ -39,5 +43,5 @@ async def extract_information(text: str, settings: Settings) -> ExtractedInfo:
         return ExtractedInfo(
             title="Error in extraction",
             summary="An error occurred while extracting information.",
-            key_points=["Unable to extract key points due to an error."]
+            key_points=["Unable to extract key points due to an error."],
         )

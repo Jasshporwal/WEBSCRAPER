@@ -1,11 +1,12 @@
 from langchain_community.document_loaders import AsyncHtmlLoader
 from langchain_community.document_transformers import BeautifulSoupTransformer
 from langchain.text_splitter import CharacterTextSplitter
-from extractor import extract_information
-from config import Settings
+from src.calculations.extractor import extract_information
+from src.calculations.config import Settings
 from bs4 import BeautifulSoup
 import aiohttp
-from extractor import extract_information, ExtractedInfo
+from src.calculations.extractor import extract_information, ExtractedInfo
+
 
 async def scrape_website(url: str, settings: Settings):
     try:
@@ -17,14 +18,31 @@ async def scrape_website(url: str, settings: Settings):
             async with session.get(url, headers=headers) as response:
                 html_content = await response.text()
 
-        print(f"HTML content: {html_content[:500]}...")  # Print first 500 characters of HTML
+        print(
+            f"HTML content: {html_content[:500]}..."
+        )  # Print first 500 characters of HTML
 
         # Parse HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, "html.parser")
 
         # Extract content from specific tags
         extracted_content = []
-        for tag in ['p', 'li', 'div', 'a', 'span', 'article', 'section', 'main', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+        for tag in [
+            "p",
+            "li",
+            "div",
+            "a",
+            "span",
+            "article",
+            "section",
+            "main",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+        ]:
             elements = soup.find_all(tag)
             for element in elements:
                 text = element.get_text(strip=True)
@@ -34,14 +52,14 @@ async def scrape_website(url: str, settings: Settings):
         print(f"Total extracted items: {len(extracted_content)}")
 
         # Join extracted content
-        text = ' '.join(extracted_content)
+        text = " ".join(extracted_content)
         print(f"Combined text length: {len(text)}")
 
         # Split text into chunks
         text_splitter = CharacterTextSplitter(chunk_size=4000, chunk_overlap=200)
         splits = text_splitter.split_text(text)
         print(f"Number of splits: {len(splits)}")
-        
+
         # Extract information using LLM
         extracted_info = []
         for i, split in enumerate(splits):
@@ -51,17 +69,25 @@ async def scrape_website(url: str, settings: Settings):
                 if isinstance(result, ExtractedInfo):
                     extracted_info.append(result)
                 else:
-                    print(f"Unexpected result type from extract_information: {type(result)}")
+                    print(
+                        f"Unexpected result type from extract_information: {type(result)}"
+                    )
             except Exception as e:
                 if "invalid_api_key" in str(e):
-                    raise ValueError("Invalid OpenAI API key. Please check your configuration.") from e
+                    raise ValueError(
+                        "Invalid OpenAI API key. Please check your configuration."
+                    ) from e
                 else:
                     print(f"Error processing split {i+1}: {str(e)}")
-                    extracted_info.append(ExtractedInfo(
-                        title=f"Error in extraction (split {i+1})",
-                        summary=f"An error occurred while extracting information from split {i+1}.",
-                        key_points=[f"Unable to extract key points from split {i+1} due to an error."]
-                    ))
+                    extracted_info.append(
+                        ExtractedInfo(
+                            title=f"Error in extraction (split {i+1})",
+                            summary=f"An error occurred while extracting information from split {i+1}.",
+                            key_points=[
+                                f"Unable to extract key points from split {i+1} due to an error."
+                            ],
+                        )
+                    )
 
         return extracted_info
 
